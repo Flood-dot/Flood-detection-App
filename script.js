@@ -590,14 +590,22 @@ function updateCurrentStatus(data) {
         elements.lastUpdateTime.textContent = date.toLocaleTimeString();
     }
 
-    // Determine severity and update status alert
-    const severity = data.severity ? data.severity.toLowerCase() : 'normal';
-    console.log('📊 SEVERITY:', severity);
+    // DUAL-SENSOR VALIDATION: Determine actual severity based on BOTH sensors
+    const distance = data.distance || 0;
+    const waterLevelRaw = data.waterLevelRaw || 0;
+    const firmwareSeverity = data.severity ? data.severity.toLowerCase() : 'normal';
     
-    updateStatusAlert(severity, data.message || 'System monitoring active');
+    // Validate severity with dual-sensor confirmation
+    const validatedSeverity = validateDualSensorSeverity(distance, waterLevelRaw, firmwareSeverity);
+    
+    console.log('📊 FIRMWARE SEVERITY:', firmwareSeverity);
+    console.log('📊 VALIDATED SEVERITY:', validatedSeverity);
+    console.log('📐 DISTANCE:', distance, 'cm');
+    console.log('💧 WATER SENSOR:', waterLevelRaw, 'ADC');
+    
+    updateStatusAlert(validatedSeverity, generateDashboardMessage(validatedSeverity, distance, waterLevelRaw));
 
     // Calculate water level percentage - ENHANCED DEBUG
-    const distance = data.distance || 0;
     console.log('📐 RAW DISTANCE:', distance);
     
     const waterLevelPercent = calculateWaterLevelPercent(distance);
@@ -617,13 +625,106 @@ function updateCurrentStatus(data) {
     updateThresholdBar(waterLevelPercent);
     
     // Visual feedback only - no sound alerts
-    if (severity !== lastSeverity && isInitialized) {
-        lastSeverity = severity;
+    if (validatedSeverity !== lastSeverity && isInitialized) {
+        lastSeverity = validatedSeverity;
     }
     
     // Add message to history
-    if (data.message) {
-        addMessageToHistory(data.message, data.timestamp, severity);
+    const dashboardMessage = generateDashboardMessage(validatedSeverity, distance, waterLevelRaw);
+    addMessageToHistory(dashboardMessage, data.timestamp, validatedSeverity);
+}
+
+// DUAL-SENSOR VALIDATION SYSTEM
+// Validates severity based on BOTH ultrasonic and water level sensors
+function validateDualSensorSeverity(distance, waterLevelRaw, firmwareSeverity) {
+    // Water sensor thresholds (matching firmware)
+    const WATER_SENSOR_DRY = 500;
+    const WATER_SENSOR_TOUCHING = 800;
+    const WATER_SENSOR_THRESHOLD = 1200; // Confirmation threshold
+    
+    // Distance thresholds (matching firmware)
+    const NORMAL_THRESHOLD_MIN = 10.2;
+    const WARNING_THRESHOLD_MIN = 9.4;
+    
+    // Determine ultrasonic state
+    let ultrasonicState = 'normal';
+    if (distance < WARNING_THRESHOLD_MIN) {
+        ultrasonicState = 'critical';
+    } else if (distance < NORMAL_THRESHOLD_MIN) {
+        ultrasonicState = 'warning';
+    }
+    
+    // Determine water sensor status
+    let waterSensorStatus = 'dry';
+    if (waterLevelRaw >= WATER_SENSOR_THRESHOLD) {
+        waterSensorStatus = 'confirmed'; // ≥1200 = Alarm confirmation
+    } else if (waterLevelRaw >= WATER_SENSOR_TOUCHING) {
+        waterSensorStatus = 'rising'; // 800-1199 = Rising
+    } else if (waterLevelRaw >= WATER_SENSOR_DRY) {
+        waterSensorStatus = 'touching'; // 500-799 = Touching
+    }
+    
+    console.log('🔍 ULTRASONIC STATE:', ultrasonicState);
+    console.log('🔍 WATER SENSOR STATUS:', waterSensorStatus);
+    console.log('🔍 DUAL-SENSOR VALIDATION RESULT:', 
+        ultrasonicState === 'warning' && waterSensorStatus !== 'confirmed' ? 
+        'WARNING BLOCKED - No water sensor confirmation' :
+        ultrasonicState === 'critical' && waterSensorStatus !== 'confirmed' ? 
+        'CRITICAL BLOCKED - No water sensor confirmation' :
+        'VALIDATION PASSED');
+    
+    // DUAL-SENSOR VALIDATION LOGIC
+    // Both sensors must confirm for warning/critical alerts
+    if (ultrasonicState === 'normal') {
+        return 'normal'; // Always normal if ultrasonic is normal
+    } else if (ultrasonicState === 'warning') {
+        // Warning level requires BOTH ultrasonic warning AND water sensor confirmation
+        if (waterSensorStatus === 'confirmed') {
+            return 'warning'; // DUAL-SENSOR CONFIRMED WARNING
+        } else {
+            return 'normal'; // Ultrasonic warning but no water confirmation
+        }
+    } else if (ultrasonicState === 'critical') {
+        // Critical level requires BOTH ultrasonic critical AND water sensor confirmation
+        if (waterSensorStatus === 'confirmed') {
+            return 'critical'; // DUAL-SENSOR CONFIRMED CRITICAL
+        } else {
+            return 'normal'; // Ultrasonic critical but no water confirmation
+        }
+    }
+    
+    return 'normal'; // Default to normal
+}
+
+// Generate dashboard-specific messages based on dual-sensor validation
+function generateDashboardMessage(severity, distance, waterLevelRaw) {
+    const waterSensorStatus = getWaterSensorStatus(waterLevelRaw);
+    
+    if (severity === 'normal') {
+        if (distance < 10.2 && waterLevelRaw < 1200) {
+            return `Ultrasonic detects ${distance.toFixed(1)}cm but no water sensor confirmation - System remains NORMAL`;
+        } else {
+            return `Water level normal (${distance.toFixed(1)}cm) - Dual-sensor monitoring active`;
+        }
+    } else if (severity === 'warning') {
+        return `WARNING: Dual-sensor confirmation (ultrasonic ${distance.toFixed(1)}cm + water sensor ${waterLevelRaw})`;
+    } else if (severity === 'critical') {
+        return `CRITICAL FLOOD! Dual-sensor confirmation (ultrasonic ${distance.toFixed(1)}cm + water sensor ${waterLevelRaw})`;
+    }
+    
+    return 'FloodGuard Pro - Flood detection system active';
+}
+
+// Get water sensor status description
+function getWaterSensorStatus(waterLevelRaw) {
+    if (waterLevelRaw < 500) {
+        return 'DRY';
+    } else if (waterLevelRaw < 800) {
+        return 'TOUCHING';
+    } else if (waterLevelRaw >= 1200) {
+        return 'CONFIRMED';
+    } else {
+        return 'RISING';
     }
 }
 
@@ -1009,11 +1110,11 @@ setTimeout(() => {
         console.log('🎭 No real data received, showing professional demo data');
         const demoData = {
             waterLevel: 27,
-            distance: 8.0,
+            distance: 10.5, // Normal distance - no false alarms
             severity: 'Normal',
             message: 'FloodGuard Pro - Flood detection system active. Connect ESP32 for live data.',
             timestamp: Math.floor(Date.now() / 1000),
-            waterLevelRaw: 850
+            waterLevelRaw: 450 // Dry water sensor - prevents false warnings
         };
         updateCurrentStatus(demoData);
         addMessageToHistory('🚀 FloodGuard Pro initialized - Flood detection system ready', demoData.timestamp, 'info');
