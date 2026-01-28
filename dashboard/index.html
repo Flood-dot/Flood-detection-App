@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FloodGuard Pro - Enterprise Monitoring System</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="description" content="Professional flood monitoring and alert system with real-time sensor data and predictive analytics">
+    <meta name="theme-color" content="#00d4ff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FloodGuard Pro">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="msapplication-TileColor" content="#0f172a">
+    <meta name="msapplication-tap-highlight" content="no">
+    
+    <!-- Icons and Manifest -->
+    <link rel="icon" href="icons/FD_logo.png" type="image/png">
+    <link rel="apple-touch-icon" href="icons/FD_logo.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="icons/icon-72x72 (1).png">
+    <link rel="apple-touch-icon" sizes="96x96" href="icons/icon-96x96 (1).png">
+    <link rel="apple-touch-icon" sizes="128x128" href="icons/icon-128x128 (1).png">
+    <link rel="apple-touch-icon" sizes="144x144" href="icons/icon-144x144 (1).png">
+    <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152x152 (1).png">
+    <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192 (1).png">
+    <link rel="apple-touch-icon" sizes="384x384" href="icons/icon-384x384 (1).png">
+    <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512x512 (1).png">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Firebase and Chart.js -->
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- Compact Professional Header -->
+    <header class="enterprise-header compact">
+        <div class="header-container">
+            <div class="brand-section">
+                <div class="brand-logo compact">
+                    <div class="logo-hexagon small">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+                        </svg>
+                    </div>
+                    <div class="brand-identity compact">
+                        <h1 class="brand-name">FloodGuard Pro</h1>
+                        <p class="brand-tagline">Enterprise Monitoring</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="system-metrics compact">
+                <div class="metric-group inline">
+                    <div class="connection-info compact">
+                        <div class="connection-status" id="connectionStatus">
+                            <span class="status-dot"></span>
+                            <span class="status-text">Connecting...</span>
+                        </div>
+                        <div class="connection-quality">
+                            <span class="quality-label">Quality:</span>
+                            <span id="connectionQuality" class="quality-value">--</span>
+                        </div>
+                    </div>
+                    <div class="update-info compact">
+                        <div class="last-update">
+                            <span class="update-label">Updated:</span>
+                            <span id="lastUpdateTime" class="update-time">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Mobile Navigation -->
+    <nav class="mobile-nav" id="mobileNav">
+        <button class="mobile-nav-toggle" id="mobileNavToggle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+                <line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+        </button>
+        <div class="mobile-nav-menu" id="mobileNavMenu">
+            <div class="mobile-nav-header">
+                <h3>Quick Navigation</h3>
+                <button class="mobile-nav-close" id="mobileNavClose">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="mobile-nav-items">
+                <a href="#status-section" class="mobile-nav-item" data-section="status">
+                    <div class="nav-icon">
+                        <img src="icons/FD_logo.png" alt="System Status" style="width: 100%; height: 100%; object-fit: contain; border-radius: 4px;">
+                    </div>
+                    <div class="nav-content">
+                        <span class="nav-title">System Status</span>
+                        <span class="nav-subtitle">Threat level & alerts</span>
+                    </div>
+                </a>
+                <a href="#sensors-section" class="mobile-nav-item" data-section="sensors">
+                    <div class="nav-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M8 2v4"/>
+                            <path d="M16 2v4"/>
+                            <rect width="18" height="18" x="3" y="4" rx="2"/>
+                            <path d="M3 10h18"/>
+                        </svg>
+                    </div>
+                    <div class="nav-content">
+                        <span class="nav-title">Sensor Data</span>
+                        <span class="nav-subtitle">Live measurements</span>
+                    </div>
+                </a>
+                <a href="#analytics-section" class="mobile-nav-item" data-section="analytics">
+                    <div class="nav-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 20V10"/>
+                            <path d="M18 20V4"/>
+                            <path d="M6 20v-4"/>
+                        </svg>
+                    </div>
+                    <div class="nav-content">
+                        <span class="nav-title">Analytics</span>
+                        <span class="nav-subtitle">Charts & trends</span>
+                    </div>
+                </a>
+                <a href="#events-section" class="mobile-nav-item" data-section="events">
+                    <div class="nav-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="16" x2="12" y2="12"/>
+                            <line x1="12" y1="8" x2="12.01" y2="8"/>
+                        </svg>
+                    </div>
+                    <div class="nav-content">
+                        <span class="nav-title">System Events</span>
+                        <span class="nav-subtitle">Activity log</span>
+                    </div>
+                </a>
+            </div>
+        </div>
+        <div class="mobile-nav-overlay" id="mobileNavOverlay"></div>
+    </nav>
+
+    <!-- Main Dashboard -->
+    <main class="dashboard-main">
+        <div class="dashboard-container">
+            
+            <!-- Critical Alert Banner -->
+            <div class="alert-banner" id="alertBanner" style="display: none;">
+                <div class="alert-content">
+                    <div class="alert-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                            <line x1="12" y1="9" x2="12" y2="13"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                    </div>
+                    <div class="alert-text">
+                        <h3 id="alertBannerTitle">System Alert</h3>
+                        <p id="alertBannerMessage">Monitoring system status...</p>
+                    </div>
+                    <div class="alert-actions">
+                        <button class="alert-dismiss" onclick="dismissAlert()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Primary Status Card -->
+            <div class="status-overview" id="status-section">
+                <div class="status-card primary-status" id="statusAlert">
+                    <div class="status-header">
+                        <div class="status-icon">
+                            <img src="icons/FD_logo.png" alt="FloodGuard Pro Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
+                        </div>
+                        <div class="status-info">
+                            <h2 id="alertTitle" class="status-title">System Status</h2>
+                            <p id="alertMessage" class="status-description">Initializing monitoring systems...</p>
+                        </div>
+                        <div class="status-indicator">
+                            <div class="pulse-ring"></div>
+                            <div class="status-dot"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Threat Level Bar -->
+                    <div class="threat-level-container">
+                        <div class="threat-level-header">
+                            <span class="threat-label">Threat Level</span>
+                            <span class="threat-percentage" id="threatPercentage">0%</span>
+                        </div>
+                        <div class="threat-level-bar">
+                            <div class="threat-level-fill" id="thresholdFill"></div>
+                            <div class="threat-markers">
+                                <div class="marker normal" style="left: 25%">
+                                    <span class="marker-label">Normal (0-49%)</span>
+                                </div>
+                                <div class="marker warning" style="left: 60%">
+                                    <span class="marker-label">Warning (50-69%)</span>
+                                </div>
+                                <div class="marker critical" style="left: 85%">
+                                    <span class="marker-label">Critical (70-100%)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sensor Data Grid -->
+            <div class="sensor-grid" id="sensors-section">
+                <!-- Water Level Sensor -->
+                <div class="sensor-card">
+                    <div class="sensor-header">
+                        <div class="sensor-icon water-level">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+                            </svg>
+                        </div>
+                        <div class="sensor-title">
+                            <h3>Water Level</h3>
+                            <p>Flood Detection</p>
+                        </div>
+                    </div>
+                    <div class="sensor-value">
+                        <span class="value-number" id="waterLevelValue">0.0</span>
+                        <span class="value-unit">%</span>
+                    </div>
+                    <div class="sensor-trend" id="waterLevelTrend">
+                        <span class="trend-icon">→</span>
+                        <span class="trend-text">Stable</span>
+                    </div>
+                </div>
+
+                <!-- Distance Sensor -->
+                <div class="sensor-card">
+                    <div class="sensor-header">
+                        <div class="sensor-icon distance">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M8 2v4"/>
+                                <path d="M16 2v4"/>
+                                <rect width="18" height="18" x="3" y="4" rx="2"/>
+                                <path d="M3 10h18"/>
+                                <path d="M8 14h.01"/>
+                                <path d="M12 14h.01"/>
+                                <path d="M16 14h.01"/>
+                                <path d="M8 18h.01"/>
+                                <path d="M12 18h.01"/>
+                                <path d="M16 18h.01"/>
+                            </svg>
+                        </div>
+                        <div class="sensor-title">
+                            <h3>Distance</h3>
+                            <p>Ultrasonic Sensor</p>
+                        </div>
+                    </div>
+                    <div class="sensor-value">
+                        <span class="value-number" id="sensorDistance">0.0</span>
+                        <span class="value-unit">cm</span>
+                    </div>
+                    <div class="sensor-trend" id="distanceTrend">
+                        <span class="trend-icon">→</span>
+                        <span class="trend-text">Normal</span>
+                    </div>
+                </div>
+
+                <!-- Water Contact Sensor -->
+                <div class="sensor-card">
+                    <div class="sensor-header">
+                        <div class="sensor-icon contact">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+                                <circle cx="12" cy="12" r="1"/>
+                            </svg>
+                        </div>
+                        <div class="sensor-title">
+                            <h3>Water Contact</h3>
+                            <p>Physical Sensor</p>
+                        </div>
+                    </div>
+                    <div class="sensor-value">
+                        <span class="value-number" id="waterSensorValue">0</span>
+                        <span class="value-unit" id="waterSensorUnit">ADC</span>
+                    </div>
+                    <div class="sensor-trend" id="waterSensorStatus">
+                        <span class="trend-icon">○</span>
+                        <span class="trend-text">Dry</span>
+                    </div>
+                </div>
+
+                <!-- System Performance -->
+                <div class="sensor-card">
+                    <div class="sensor-header">
+                        <div class="sensor-icon performance">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 20V10"/>
+                                <path d="M18 20V4"/>
+                                <path d="M6 20v-4"/>
+                            </svg>
+                        </div>
+                        <div class="sensor-title">
+                            <h3>Performance</h3>
+                            <p>System Metrics</p>
+                        </div>
+                    </div>
+                    <div class="sensor-value">
+                        <span class="value-number" id="dataPoints">0</span>
+                        <span class="value-unit">pts</span>
+                    </div>
+                    <div class="sensor-trend">
+                        <span class="trend-icon">📊</span>
+                        <span class="trend-text">Active</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Section -->
+            <div class="analytics-section" id="analytics-section">
+                <!-- Chart Panel -->
+                <div class="chart-panel">
+                    <div class="panel-header">
+                        <h3>Real-Time Analytics</h3>
+                        <div class="chart-controls">
+                            <button class="chart-control active" data-range="1h">1H</button>
+                            <button class="chart-control" data-range="6h">6H</button>
+                            <button class="chart-control" data-range="24h">24H</button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="waterLevelChart"></canvas>
+                        <div class="chart-loading" id="chartLoading">
+                            <div class="loading-spinner"></div>
+                            <p>Loading analytics...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Event Log Panel -->
+                <div class="event-panel" id="events-section">
+                    <div class="panel-header">
+                        <h3>System Events</h3>
+                        <div class="event-counter">
+                            <span id="messageCount">0</span> events
+                        </div>
+                    </div>
+                    <div class="event-list" id="messagesList">
+                        <div class="no-events">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="16" x2="12" y2="12"/>
+                                <line x1="12" y1="8" x2="12.01" y2="8"/>
+                            </svg>
+                            <span>No events recorded</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Emergency Evacuation Popup -->
+    <div class="evacuation-popup-overlay" id="evacuationPopupOverlay" style="display: none;">
+        <div class="evacuation-popup">
+            <div class="evacuation-header">
+                <div class="evacuation-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                </div>
+                <h2 class="evacuation-title">⚠️ FLOOD WARNING ⚠️</h2>
+            </div>
+            
+            <div class="evacuation-content">
+                <div class="evacuation-message">
+                    <h3>WARNING: PREPARE FOR EVACUATION IMMEDIATELY!</h3>
+                    <p>Water levels have reached the warning threshold. Take immediate action to protect yourself and your property.</p>
+                </div>
+                
+                <div class="evacuation-actions">
+                    <div class="action-item urgent">
+                        <div class="action-icon">🚨</div>
+                        <div class="action-text">
+                            <strong>Move to higher ground</strong>
+                            <span>Evacuate to a safe location immediately</span>
+                        </div>
+                    </div>
+                    
+                    <div class="action-item">
+                        <div class="action-icon">📱</div>
+                        <div class="action-text">
+                            <strong>Alert emergency contacts</strong>
+                            <span>Notify family and emergency services</span>
+                        </div>
+                    </div>
+                    
+                    <div class="action-item">
+                        <div class="action-icon">🎒</div>
+                        <div class="action-text">
+                            <strong>Gather emergency supplies</strong>
+                            <span>Take essential items and documents</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="evacuation-footer">
+                <button class="evacuation-acknowledge" id="evacuationAcknowledge">
+                    <span>I UNDERSTAND - ACKNOWLEDGE WARNING</span>
+                </button>
+                <div class="evacuation-timer">
+                    <span>Auto-dismiss in <span id="evacuationTimer">30</span> seconds</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="loading-logo">
+                <div class="logo-hexagon">
+                    <img src="icons/FD_logo.png" alt="FloodGuard Pro Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
+                </div>
+            </div>
+            <div class="loading-text">
+                <h2>FloodGuard Pro</h2>
+                <p>Initializing enterprise monitoring systems...</p>
+            </div>
+            <div class="loading-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script src="enhanced-features.js"></script>
+    <script src="performance-monitor.js"></script>
+    <script src="validation-check.js"></script>
+    
+    <!-- Service Worker Registration for PWA -->
+    <script>
+        // Register service worker for PWA functionality
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((registration) => {
+                        console.log('✅ Service Worker registered successfully:', registration.scope);
+                        
+                        // Check for updates
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // New content is available, prompt user to refresh
+                                    if (confirm('New version available! Refresh to update?')) {
+                                        window.location.reload();
+                                    }
+                                }
+                            });
+                        });
+                    })
+                    .catch((error) => {
+                        console.log('❌ Service Worker registration failed:', error);
+                    });
+            });
+        }
+
+        // Check if already installed and log status
+        if (window.matchMedia('(display-mode: standalone)').matches || 
+            window.navigator.standalone === true) {
+            console.log('✅ PWA is running in standalone mode');
+        }
+    </script>
+</body>
+</html>
