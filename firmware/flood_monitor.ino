@@ -28,8 +28,8 @@
 #include <time.h>
 
 // WiFi credentials - UPDATE THESE WITH YOUR NETWORK
-const char* ssid = "YOUR_WIFI_SSID";        // Replace with your WiFi network name
-const char* password = "YOUR_WIFI_PASSWORD"; // Replace with your WiFi password
+const char* ssid = "DPWH";        // Replace with your WiFi network name
+const char* password = "123456789000"; // Replace with your WiFi password
 
 // Firebase configuration
 #define FIREBASE_HOST "flood-detection-5d4e6-default-rtdb.firebaseio.com"
@@ -45,9 +45,20 @@ const char* password = "YOUR_WIFI_PASSWORD"; // Replace with your WiFi password
 #define LED_RED_PIN 16      // Red LED for Critical
 
 // Thresholds (in cm from ultrasonic sensor) - Updated ranges per user specification
-#define NORMAL_THRESHOLD_MIN 10.2   // 11cm to 10.2cm = Normal (safe level)
+#define NORMAL_THRESHOLD_MIN 10.2   // 13cm to 10.2cm = Normal (safe level)
 #define WARNING_THRESHOLD_MIN 9.4   // 10.2cm to 9.4cm = Warning (rising water)
-#define CRITICAL_THRESHOLD_MAX 9.4  // 9.4cm to 0cm = Critical (flood detected)
+#define CRITICAL_THRESHOLD_MAX 9.2  // 9.2cm to 0cm = Critical (flood detected)
+
+// Hysteresis thresholds to prevent LED flickering - OPTIMIZED for faster response
+#define NORMAL_HYSTERESIS 0.05      // 0.05cm hysteresis for faster response (was 0.1)
+#define WARNING_HYSTERESIS 0.05     // 0.05cm hysteresis for faster response (was 0.1)
+#define CRITICAL_HYSTERESIS 0.05    // 0.05cm hysteresis for faster response (was 0.1)
+
+// Calculated stable thresholds with hysteresis - OPTIMIZED
+#define NORMAL_TO_WARNING_THRESHOLD (NORMAL_THRESHOLD_MIN - NORMAL_HYSTERESIS)    // 10.15cm (was 10.1)
+#define WARNING_TO_NORMAL_THRESHOLD (NORMAL_THRESHOLD_MIN + NORMAL_HYSTERESIS)    // 10.25cm (was 10.3)
+#define WARNING_TO_CRITICAL_THRESHOLD (WARNING_THRESHOLD_MIN - WARNING_HYSTERESIS) // 9.35cm (was 9.3)
+#define CRITICAL_TO_WARNING_THRESHOLD (WARNING_THRESHOLD_MIN + WARNING_HYSTERESIS) // 9.45cm (was 9.5)
 
 // Water level sensor thresholds (analog values 0-4095)
 // DUAL-SENSOR CONFIRMATION: Both ultrasonic AND water level must meet thresholds
@@ -74,6 +85,7 @@ FirebaseAuth auth;
 enum SeverityState { NORMAL, WARNING, CRITICAL };
 SeverityState currentState = NORMAL;
 SeverityState previousState = NORMAL;
+SeverityState stableState = NORMAL;  // New: Stable state for LED control
 
 unsigned long lastMeasurement = 0;
 unsigned long lastFirebaseUpdate = 0;
@@ -84,6 +96,12 @@ bool buzzerState = false;
 bool warningAlarmActive = false;
 bool firebaseConnected = false;
 int firebaseRetryCount = 0;
+
+// LED Stability Control - OPTIMIZED for faster response
+unsigned long lastStateChange = 0;
+unsigned long stateStabilityDelay = 1000;  // 1 second stability required (was 3000ms)
+bool ledStatesLocked = false;  // Prevent LED flickering
+SeverityState pendingState = NORMAL;  // State waiting for confirmation
 
 // Performance optimization variables
 unsigned long lastSuccessfulUpdate = 0;
@@ -179,7 +197,7 @@ void loop() {
   
   // Ultra-fast measurements every 0.5 seconds for maximum responsiveness
   if (currentTime - lastMeasurement >= MEASUREMENT_INTERVAL) {
-    Serial.println("--- Ultra-fast measurements ---");
+    Serial.println("--- Ultra-fast measurements with LED stability ---");
     
     float distance = measureDistance();
     int waterLevelRaw = measureWaterLevel();
@@ -192,19 +210,54 @@ void loop() {
     if (distance > 0) {  // Valid ultrasonic reading (primary sensor)
       Serial.println("✅ Valid ultrasonic reading received");
       
-      // Determine state based on ultrasonic sensor (primary)
+      // Determine immediate state based on ultrasonic sensor (for Firebase)
       previousState = currentState;
       currentState = determineStateFromUltrasonic(distance);
       
-      Serial.print("State determined: ");
+      // Determine stable state with hysteresis (for LED control)
+      SeverityState newStableState = determineStableStateWithHysteresis(distance, stableState);
+      
+      // Check if stable state is changing
+      if (newStableState != stableState) {
+        // State wants to change - start stability timer
+        if (pendingState != newStableState) {
+          pendingState = newStableState;
+          lastStateChange = currentTime;
+          ledStatesLocked = true;  // Lock LEDs during transition
+          Serial.print("🔄 State change pending: ");
+          Serial.print(getStateString(stableState));
+          Serial.print(" -> ");
+          Serial.print(getStateString(pendingState));
+          Serial.println(" (waiting for stability)");
+        }
+        
+        // Check if enough time has passed for stable state change
+        if (currentTime - lastStateChange >= stateStabilityDelay) {
+          stableState = pendingState;
+          ledStatesLocked = false;  // Unlock LEDs
+          Serial.print("✅ State stabilized: ");
+          Serial.println(getStateString(stableState));
+        }
+      } else {
+        // State is stable - reset pending state
+        if (pendingState != stableState) {
+          pendingState = stableState;
+          ledStatesLocked = false;  // Unlock LEDs
+          Serial.println("🔒 State change cancelled - returned to stable state");
+        }
+      }
+      
+      Serial.print("Current state (Firebase): ");
       Serial.println(getStateString(currentState));
+      Serial.print("Stable state (LEDs): ");
+      Serial.println(getStateString(stableState));
       
-      // Control alarms based on both sensors (immediate response)
-      controlAlarmsWithDualSensors(currentState, waterLevelRaw, currentTime);
+      // Control alarms based on STABLE state and dual sensors
+      controlAlarmsWithDualSensorsStable(stableState, waterLevelRaw, currentTime);
       
-      // Check for state changes - immediate update for critical changes
+      // Check for immediate state changes for Firebase (use current state)
       if (currentState != previousState) {
-        Serial.println("State changed - immediate Firebase update");
+        Serial.println("Firebase state changed - immediate update");
         updateFirebaseImmediate(distance, waterLevelRaw);
         lastFirebaseUpdate = currentTime;
       }
@@ -318,6 +371,41 @@ SeverityState determineStateFromUltrasonic(float distance) {
   }
 }
 
+// NEW: Stable state determination with hysteresis to prevent LED flickering
+SeverityState determineStableStateWithHysteresis(float distance, SeverityState currentStableState) {
+  // Use hysteresis to prevent rapid state changes around thresholds
+  switch (currentStableState) {
+    case NORMAL:
+      // From NORMAL, only change to WARNING if distance drops below hysteresis threshold
+      if (distance < NORMAL_TO_WARNING_THRESHOLD) {  // 10.15cm (was 10.1cm)
+        return WARNING;
+      }
+      return NORMAL;  // Stay in NORMAL
+      
+    case WARNING:
+      // From WARNING, change to NORMAL if distance rises above hysteresis threshold
+      if (distance > WARNING_TO_NORMAL_THRESHOLD) {  // 10.25cm (was 10.3cm)
+        return NORMAL;
+      }
+      // From WARNING, change to CRITICAL if distance drops below hysteresis threshold
+      else if (distance < WARNING_TO_CRITICAL_THRESHOLD) {  // 9.35cm (was 9.3cm)
+        return CRITICAL;
+      }
+      return WARNING;  // Stay in WARNING
+      
+    case CRITICAL:
+      // From CRITICAL, only change to WARNING if distance rises above hysteresis threshold
+      if (distance > CRITICAL_TO_WARNING_THRESHOLD) {  // 9.45cm (was 9.5cm)
+        return WARNING;
+      }
+      return CRITICAL;  // Stay in CRITICAL
+      
+    default:
+      // Fallback to normal determination
+      return determineStateFromUltrasonic(distance);
+  }
+}
+
 String determineWaterSensorStatus(int waterLevelRaw) {
   if (waterLevelRaw < WATER_SENSOR_DRY) {
     return "DRY";
@@ -400,8 +488,92 @@ void controlAlarmsWithDualSensors(SeverityState ultrasonicState, int waterLevelR
   }
 }
 
+// NEW: Stable LED control function with hysteresis and stability delay
+void controlAlarmsWithDualSensorsStable(SeverityState stableUltrasonicState, int waterLevelRaw, unsigned long currentTime) {
+  String waterSensorStatus = determineWaterSensorStatus(waterLevelRaw);
+  bool waterSensorConfirmed = (waterSensorStatus == "CONFIRMED");  // >= 1200
+  
+  // Skip LED updates if states are locked during transition
+  if (ledStatesLocked) {
+    Serial.println("🔒 LEDs locked during state transition - maintaining current state");
+    // Still handle buzzer based on immediate state for safety
+    if (currentState == CRITICAL && waterSensorConfirmed) {
+      // Allow critical buzzer even during LED lock for safety
+      warningAlarmActive = false;
+      warningStep = 0;
+    } else if (currentState == WARNING && waterSensorConfirmed) {
+      warningAlarmActive = true;
+      warningAlarmPattern(currentTime);
+    } else {
+      digitalWrite(BUZZER_PIN, LOW);
+      warningAlarmActive = false;
+      warningStep = 0;
+      buzzerState = false;
+    }
+    return;
+  }
+  
+  // STABLE LED CONTROL: LEDs use stable state with dual-sensor confirmation
+  if (stableUltrasonicState == NORMAL) {
+    // Normal level - Only Green LED (no dual-sensor needed for normal)
+    digitalWrite(LED_GREEN_PIN, HIGH);
+    digitalWrite(LED_YELLOW_PIN, LOW);
+    digitalWrite(LED_RED_PIN, LOW);
+    digitalWrite(BUZZER_PIN, LOW);
+    buzzerState = false;
+    warningAlarmActive = false;
+    warningStep = 0;
+    Serial.println("STABLE NORMAL: Green LED ON - water level safe and stable");
+    
+  } else if (stableUltrasonicState == WARNING) {
+    // Warning level - LEDs require DUAL-SENSOR CONFIRMATION
+    if (waterSensorConfirmed) {
+      // WARNING CONFIRMED: Both stable ultrasonic AND water sensor confirm
+      digitalWrite(LED_GREEN_PIN, HIGH);   // Green ON (confirmed warning)
+      digitalWrite(LED_YELLOW_PIN, HIGH);  // Yellow ON (confirmed warning)
+      digitalWrite(LED_RED_PIN, LOW);      // Red still OFF
+      
+      warningAlarmActive = true;
+      warningAlarmPattern(currentTime);  // Intermittent beep pattern
+      Serial.println("STABLE WARNING CONFIRMED: Green + Yellow LEDs ON + BUZZER - Stable dual-sensor confirmation");
+    } else {
+      // WARNING NOT CONFIRMED: Stable ultrasonic warning but no water sensor confirmation
+      digitalWrite(LED_GREEN_PIN, HIGH);   // Only Green LED (normal state)
+      digitalWrite(LED_YELLOW_PIN, LOW);   // NO Yellow LED (no water detected)
+      digitalWrite(LED_RED_PIN, LOW);      // NO Red LED
+      digitalWrite(BUZZER_PIN, LOW);       // NO buzzer
+      warningAlarmActive = false;
+      warningStep = 0;
+      buzzerState = false;
+      Serial.println("STABLE WARNING NOT CONFIRMED: Only Green LED ON - stable ultrasonic warning but no water detected");
+    }
+    
+  } else if (stableUltrasonicState == CRITICAL) {
+    // Critical level - LEDs require DUAL-SENSOR CONFIRMATION
+    if (waterSensorConfirmed) {
+      // CRITICAL CONFIRMED: Both stable ultrasonic AND water sensor confirm
+      digitalWrite(LED_GREEN_PIN, HIGH);   // Green ON (confirmed critical)
+      digitalWrite(LED_YELLOW_PIN, HIGH);  // Yellow ON (confirmed critical)
+      digitalWrite(LED_RED_PIN, HIGH);     // Red ON (confirmed critical)
+      
+      warningAlarmActive = false;  // Stop warning pattern
+      warningStep = 0;
+      Serial.println("STABLE CRITICAL CONFIRMED: All LEDs ON (Green + Yellow + Red) + CONTINUOUS BUZZER - Stable dual-sensor confirmation");
+    } else {
+      // CRITICAL NOT CONFIRMED: Stable ultrasonic critical but no water sensor confirmation
+      digitalWrite(LED_GREEN_PIN, HIGH);   // Only Green LED (normal state)
+      digitalWrite(LED_YELLOW_PIN, LOW);   // NO Yellow LED (no water detected)
+      digitalWrite(LED_RED_PIN, LOW);      // NO Red LED (no water detected)
+      digitalWrite(BUZZER_PIN, LOW);       // NO buzzer
+      buzzerState = false;
+      Serial.println("STABLE CRITICAL NOT CONFIRMED: Only Green LED ON - stable ultrasonic critical but no water detected");
+    }
+  }
+}
+
 void handleContinuousBuzzer(unsigned long currentTime) {
-  // Urgent continuous pattern only if BOTH sensors confirm critical level
+  // Use CURRENT state for buzzer (immediate response for safety)
+  // But LEDs use STABLE state (for stability)
   if (currentState == CRITICAL) {
     int waterLevelRaw = getFilteredWaterLevel();
     String waterSensorStatus = determineWaterSensorStatus(waterLevelRaw);
