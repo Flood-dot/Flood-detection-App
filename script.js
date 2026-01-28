@@ -1011,12 +1011,12 @@ setTimeout(() => {
             waterLevel: 27,
             distance: 8.0,
             severity: 'Normal',
-            message: 'FloodGuard Pro - Enterprise monitoring active. Connect ESP32 for live data.',
+            message: 'FloodGuard Pro - Flood detection system active. Connect ESP32 for live data.',
             timestamp: Math.floor(Date.now() / 1000),
             waterLevelRaw: 850
         };
         updateCurrentStatus(demoData);
-        addMessageToHistory('🚀 FloodGuard Pro initialized - Enterprise monitoring system ready', demoData.timestamp, 'info');
+        addMessageToHistory('🚀 FloodGuard Pro initialized - Flood detection system ready', demoData.timestamp, 'info');
         addMessageToHistory('📡 Demo mode active - Connect your ESP32 device for real-time monitoring', demoData.timestamp, 'info');
     }
     

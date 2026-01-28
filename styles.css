@@ -1,4 +1,4 @@
-/* FloodGuard Pro - Enterprise Professional Styling */
+/* FloodGuard Pro - Professional Flood Detection Styling */
 
 /* CSS Reset & Base */
 * {
@@ -8,7 +8,7 @@
 }
 
 :root {
-    /* Enterprise Color Palette */
+    /* Professional Color Palette */
     --primary-blue: #0066ff;
     --primary-cyan: #00d4ff;
     --primary-dark: #001a33;
@@ -95,8 +95,8 @@ body {
     overflow-x: hidden;
 }
 
-/* Enterprise Header - ULTRA COMPACT VERSION */
-.enterprise-header {
+/* FloodGuard Header - ULTRA COMPACT VERSION */
+.floodguard-header {
     background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
     border-bottom: 1px solid var(--border-primary);
     backdrop-filter: blur(20px);
@@ -107,11 +107,11 @@ body {
 }
 
 /* Ultra compact header styles */
-.enterprise-header.compact {
+.floodguard-header.compact {
     padding: 0;
 }
 
-.enterprise-header.compact .header-container {
+.floodguard-header.compact .header-container {
     padding: var(--spacing-xs) var(--spacing-lg); /* Much smaller padding */
     min-height: 60px; /* Fixed minimal height */
 }
@@ -1328,7 +1328,7 @@ body {
         min-height: 50px; /* Very compact */
     }
     
-    .enterprise-header.compact .header-container {
+    .floodguard-header.compact .header-container {
         padding: var(--spacing-xs) var(--spacing-md);
     }
     
@@ -1493,7 +1493,7 @@ body {
     }
     
     /* Ultra compact header */
-    .enterprise-header.compact .header-container {
+    .floodguard-header.compact .header-container {
         padding: 4px var(--spacing-sm);
         min-height: 44px;
     }
